@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAdmin } from "../context/AdminContext";
 import { useNavigate } from "react-router";
 import { Button } from "../components/ui/button";
@@ -13,11 +13,12 @@ export function AdminLogin() {
   const { login, isAdmin } = useAdmin();
   const navigate = useNavigate();
 
-  // If already logged in, redirect to admin dashboard
-  if (isAdmin) {
-    navigate("/admin/dashboard");
-    return null;
-  }
+  // منع الشاشة البيضاء: التوجيه يتم بعد تحميل المكون
+  useEffect(() => {
+    if (isAdmin) {
+      navigate("/admin/dashboard");
+    }
+  }, [isAdmin, navigate]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -30,6 +31,11 @@ export function AdminLogin() {
       setPassword("");
     }
   };
+
+  // إذا كان المستخدم أدمن بالفعل، نعرض حاوية فارغة لحين الانتقال للداشبورد
+  if (isAdmin) {
+    return <div className="min-h-screen bg-gray-50" />;
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
