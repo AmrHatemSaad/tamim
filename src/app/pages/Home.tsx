@@ -56,7 +56,14 @@ export function Home() {
           className="absolute inset-0 w-full h-full object-cover"
         />
         <div className="relative z-20 text-center text-white px-4">
-          <h1 className="text-5xl md:text-7xl font-bold mb-6">TAMIM</h1>
+          {/* Logo Image in Hero Section */}
+          <div className="flex justify-center mb-6">
+            <img 
+              src="Tamim.png" 
+              alt="Tamim Logo" 
+              className="h-24 md:h-32 w-auto object-contain drop-shadow-2xl" 
+            />
+          </div>
           <p className="text-xl md:text-2xl mb-8">
             Premium Clothing Made in Egypt
           </p>
