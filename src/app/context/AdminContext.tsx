@@ -1,13 +1,27 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import { db } from "../../lib/firebase"; 
+import { 
+  collection, 
+  addDoc, 
+  updateDoc, 
+  deleteDoc, 
+  doc, 
+  onSnapshot,
+  query,
+  orderBy
+} from "firebase/firestore";
 
+// 1. تحديث واجهة المنتج (Product Interface)
 export interface Product {
   id: string;
   name: string;
   price: number;
   category: "men" | "women" | "children" | "teraz";
-  image: string;
-  sizes: string[];
-  quantity: number;
+  images: string[]; // مصفوفة صور بدل صورة واحدة
+  sizes: string[]; 
+  colors: string[]; 
+  inventory: { [size: string]: number }; // كمية كل مقاس (مثل: {"M": 10, "L": 5})
+  totalQuantity: number; // إجمالي الكمية
   description?: string;
 }
 
@@ -41,158 +55,96 @@ export interface Order {
 interface AdminContextType {
   products: Product[];
   orders: Order[];
-  addProduct: (product: Omit<Product, "id">) => void;
-  updateProduct: (id: string, product: Partial<Product>) => void;
-  deleteProduct: (id: string) => void;
-  addOrder: (order: Omit<Order, "id" | "createdAt" | "status">) => void;
-  updateOrderStatus: (id: string, status: Order["status"]) => void;
+  addProduct: (product: Omit<Product, "id">) => Promise<void>;
+  updateProduct: (id: string, product: Partial<Product>) => Promise<void>;
+  deleteProduct: (id: string) => Promise<void>;
+  addOrder: (order: Omit<Order, "id" | "createdAt" | "status">) => Promise<void>;
+  updateOrderStatus: (id: string, status: Order["status"]) => Promise<void>;
   isAdmin: boolean;
   login: (password: string) => boolean;
   logout: () => void;
 }
 
 const AdminContext = createContext<AdminContextType | undefined>(undefined);
-
-const ADMIN_PASSWORD = "admin123"; // In production, this should be handled securely
-
-// Initial seed products
-const SEED_PRODUCTS: Product[] = [
-  {
-    id: "1",
-    name: "Classic Men's T-Shirt",
-    price: 299,
-    category: "men",
-    image: "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?w=500&h=500&fit=crop",
-    sizes: ["S", "M", "L", "XL", "XXL"],
-    quantity: 50,
-    description: "Comfortable cotton t-shirt for everyday wear",
-  },
-  {
-    id: "2",
-    name: "Men's Polo Shirt",
-    price: 449,
-    category: "men",
-    image: "https://images.unsplash.com/photo-1586363104862-3a5e2ab60d99?w=500&h=500&fit=crop",
-    sizes: ["S", "M", "L", "XL", "XXL"],
-    quantity: 30,
-    description: "Smart casual polo shirt",
-  },
-  {
-    id: "3",
-    name: "Women's Casual Top",
-    price: 349,
-    category: "women",
-    image: "https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?w=500&h=500&fit=crop",
-    sizes: ["XS", "S", "M", "L", "XL"],
-    quantity: 40,
-    description: "Stylish and comfortable women's top",
-  },
-  {
-    id: "4",
-    name: "Women's Summer Dress",
-    price: 599,
-    category: "women",
-    image: "https://images.unsplash.com/photo-1595777457583-95e059d581b8?w=500&h=500&fit=crop",
-    sizes: ["XS", "S", "M", "L", "XL"],
-    quantity: 25,
-    description: "Light and breezy summer dress",
-  },
-  {
-    id: "5",
-    name: "Kids' Graphic T-Shirt",
-    price: 199,
-    category: "children",
-    image: "https://images.unsplash.com/photo-1519238263530-99bdd11df2ea?w=500&h=500&fit=crop",
-    sizes: ["4-6Y", "6-8Y", "8-10Y", "10-12Y"],
-    quantity: 60,
-    description: "Fun graphic tee for kids",
-  },
-  {
-    id: "6",
-    name: "Kids' Hoodie",
-    price: 399,
-    category: "children",
-    image: "https://images.unsplash.com/photo-1622455147108-4fd74efc08bc?w=500&h=500&fit=crop",
-    sizes: ["4-6Y", "6-8Y", "8-10Y", "10-12Y"],
-    quantity: 35,
-    description: "Cozy hoodie for children",
-  },
-  {
-    id: "7",
-    name: "Arabic Calligraphy T-Shirt - Peace",
-    price: 499,
-    category: "teraz",
-    image: "https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?w=500&h=500&fit=crop",
-    sizes: ["S", "M", "L", "XL", "XXL"],
-    quantity: 20,
-    description: "Exclusive Arabic calligraphy design - 'سلام' (Peace)",
-  },
-  {
-    id: "8",
-    name: "Arabic Calligraphy T-Shirt - Love",
-    price: 499,
-    category: "teraz",
-    image: "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?w=500&h=500&fit=crop",
-    sizes: ["S", "M", "L", "XL", "XXL"],
-    quantity: 20,
-    description: "Exclusive Arabic calligraphy design - 'حب' (Love)",
-  },
-];
+const ADMIN_PASSWORD = "reem2010";
 
 export function AdminProvider({ children }: { children: ReactNode }) {
-  const [products, setProducts] = useState<Product[]>(() => {
-    const saved = localStorage.getItem("tamim_products");
-    if (saved) {
-      return JSON.parse(saved);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [isAdmin, setIsAdmin] = useState(() => localStorage.getItem("tamim_admin") === "true");
+
+  // جلب المنتجات من Firestore
+  useEffect(() => {
+    const q = query(collection(db, "products"));
+    const unsubscribe = onSnapshot(q, (querySnapshot) => {
+      const productsArray: Product[] = [];
+      querySnapshot.forEach((doc) => {
+        productsArray.push({ id: doc.id, ...doc.data() } as Product);
+      });
+      setProducts(productsArray);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // جلب الطلبات من Firestore
+  useEffect(() => {
+    const q = query(collection(db, "orders"), orderBy("createdAt", "desc"));
+    const unsubscribe = onSnapshot(q, (querySnapshot) => {
+      const ordersArray: Order[] = [];
+      querySnapshot.forEach((doc) => {
+        ordersArray.push({ id: doc.id, ...doc.data() } as Order);
+      });
+      setOrders(ordersArray);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  const addProduct = async (product: Omit<Product, "id">) => {
+    try {
+      await addDoc(collection(db, "products"), product);
+    } catch (error) {
+      console.error("Error adding product: ", error);
+      alert("حصل خطأ أثناء رفع المنتج للسحابة.");
     }
-    return SEED_PRODUCTS;
-  });
-
-  const [orders, setOrders] = useState<Order[]>(() => {
-    const saved = localStorage.getItem("tamim_orders");
-    return saved ? JSON.parse(saved) : [];
-  });
-
-  const [isAdmin, setIsAdmin] = useState(() => {
-    return localStorage.getItem("tamim_admin") === "true";
-  });
-
-  useEffect(() => {
-    localStorage.setItem("tamim_products", JSON.stringify(products));
-  }, [products]);
-
-  useEffect(() => {
-    localStorage.setItem("tamim_orders", JSON.stringify(orders));
-  }, [orders]);
-
-  const addProduct = (product: Omit<Product, "id">) => {
-    const newProduct: Product = {
-      ...product,
-      id: Date.now().toString(),
-    };
-    setProducts([...products, newProduct]);
   };
 
-  const updateProduct = (id: string, updates: Partial<Product>) => {
-    setProducts(products.map((p) => (p.id === id ? { ...p, ...updates } : p)));
+  const updateProduct = async (id: string, updates: Partial<Product>) => {
+    try {
+      const productRef = doc(db, "products", id);
+      await updateDoc(productRef, updates);
+    } catch (error) {
+      console.error("Error updating product: ", error);
+    }
   };
 
-  const deleteProduct = (id: string) => {
-    setProducts(products.filter((p) => p.id !== id));
+  const deleteProduct = async (id: string) => {
+    try {
+      await deleteDoc(doc(db, "products", id));
+    } catch (error) {
+      console.error("Error deleting product: ", error);
+    }
   };
 
-  const addOrder = (order: Omit<Order, "id" | "createdAt" | "status">) => {
-    const newOrder: Order = {
-      ...order,
-      id: Date.now().toString(),
-      status: "pending",
-      createdAt: new Date().toISOString(),
-    };
-    setOrders([newOrder, ...orders]);
+  const addOrder = async (order: Omit<Order, "id" | "createdAt" | "status">) => {
+    try {
+      const newOrder = {
+        ...order,
+        status: "pending",
+        createdAt: new Date().toISOString(),
+      };
+      await addDoc(collection(db, "orders"), newOrder);
+    } catch (error) {
+      console.error("Error adding order: ", error);
+    }
   };
 
-  const updateOrderStatus = (id: string, status: Order["status"]) => {
-    setOrders(orders.map((o) => (o.id === id ? { ...o, status } : o)));
+  const updateOrderStatus = async (id: string, status: Order["status"]) => {
+    try {
+      const orderRef = doc(db, "orders", id);
+      await updateDoc(orderRef, { status });
+    } catch (error) {
+      console.error("Error updating order status: ", error);
+    }
   };
 
   const login = (password: string): boolean => {

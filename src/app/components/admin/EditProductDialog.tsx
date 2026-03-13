@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAdmin, Product } from "../../context/AdminContext";
 import {
   Dialog,
@@ -18,7 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../ui/select";
-import { Checkbox } from "../ui/checkbox";
+import { X } from "lucide-react";
 
 interface EditProductDialogProps {
   product: Product;
@@ -27,10 +27,10 @@ interface EditProductDialogProps {
 }
 
 const AVAILABLE_SIZES = {
-  men: ["S", "M", "L", "XL", "XXL"],
-  women: ["XS", "S", "M", "L", "XL"],
+  men: ["S", "M", "L", "XL", "XXL", "3XL", "4XL"],
+  women: ["XS", "S", "M", "L", "XL", "XXL", "3XL", "4XL"],
   children: ["4-6Y", "6-8Y", "8-10Y", "10-12Y"],
-  teraz: ["S", "M", "L", "XL", "XXL"],
+  teraz: ["S", "M", "L", "XL", "XXL", "3XL", "4XL"],
 };
 
 export function EditProductDialog({
@@ -43,82 +43,170 @@ export function EditProductDialog({
     name: product.name,
     price: product.price.toString(),
     category: product.category,
-    image: product.image,
-    quantity: product.quantity.toString(),
     description: product.description || "",
+    colors: product.colors ? product.colors.join(", ") : "",
   });
-  const [selectedSizes, setSelectedSizes] = useState<string[]>(product.sizes);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const [images, setImages] = useState<string[]>(product.images || []);
+  const [inventory, setInventory] = useState<{ [key: string]: number }>(product.inventory || {});
+  const [isProcessing, setIsProcessing] = useState(false);
+
+  // تحديث البيانات عند فتح الحوار بمنتج مختلف
+  useEffect(() => {
+    if (product) {
+      setFormData({
+        name: product.name,
+        price: product.price.toString(),
+        category: product.category,
+        description: product.description || "",
+        colors: product.colors ? product.colors.join(", ") : "",
+      });
+      setImages(product.images || []);
+      setInventory(product.inventory || {});
+    }
+  }, [product]);
+
+  const handleMultipleImagesUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    setIsProcessing(true);
+
+    files.forEach((file) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const img = new Image();
+        img.src = reader.result as string;
+        img.onload = () => {
+          const canvas = document.createElement("canvas");
+          const MAX_WIDTH = 800;
+          const scaleSize = MAX_WIDTH / img.width;
+          canvas.width = MAX_WIDTH;
+          canvas.height = img.height * scaleSize;
+          const ctx = canvas.getContext("2d");
+          if (ctx) {
+            ctx.imageSmoothingQuality = "high";
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          }
+          const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
+          setImages((prev) => [...prev, dataUrl]);
+          setIsProcessing(false);
+        };
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const removeImage = (index: number) => {
+    setImages(images.filter((_, i) => i !== index));
+  };
+
+  const handleInventoryChange = (size: string, value: string) => {
+    const qty = parseInt(value) || 0;
+    setInventory((prev) => ({ ...prev, [size]: qty }));
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!formData.name || !formData.price || !formData.image || !formData.quantity) {
-      alert("Please fill in all required fields");
+    const totalQty = Object.values(inventory).reduce((a, b) => a + (b || 0), 0);
+
+    if (images.length === 0) {
+      alert("الرجاء إضافة صورة واحدة على الأقل");
       return;
     }
 
-    if (selectedSizes.length === 0) {
-      alert("Please select at least one size");
-      return;
-    }
+    const colorsArray = formData.colors
+      .split(",")
+      .map((c) => c.trim())
+      .filter((c) => c !== "");
 
-    updateProduct(product.id, {
+    await updateProduct(product.id, {
       name: formData.name,
       price: parseFloat(formData.price),
       category: formData.category,
-      image: formData.image,
-      quantity: parseInt(formData.quantity),
-      sizes: selectedSizes,
+      images: images,
+      inventory: inventory,
+      totalQuantity: totalQty,
+      colors: colorsArray,
       description: formData.description,
+      sizes: Object.keys(inventory).filter((s) => inventory[s] > 0),
     });
 
     onOpenChange(false);
   };
 
-  const toggleSize = (size: string) => {
-    setSelectedSizes((prev) =>
-      prev.includes(size) ? prev.filter((s) => s !== size) : [...prev, size]
-    );
-  };
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Edit Product</DialogTitle>
-          <DialogDescription>
-            Update product information
-          </DialogDescription>
+          <DialogTitle>تعديل منتج: {product.name}</DialogTitle>
+          <DialogDescription>تحديث بيانات وصور المنتج في السحابة</DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-6">
+          {/* قسم الصور المتعددة */}
+          <div className="space-y-2">
+            <Label>صور المنتج</Label>
+            <Input
+              type="file"
+              multiple
+              accept="image/*"
+              onChange={handleMultipleImagesUpload}
+              className="cursor-pointer"
+            />
+            <div className="grid grid-cols-4 gap-4 mt-4">
+              {images.map((img, index) => (
+                <div key={index} className="relative group aspect-square border rounded-lg overflow-hidden bg-gray-100">
+                  <img src={img} alt="Product" className="w-full h-full object-cover" />
+                  <button
+                    type="button"
+                    onClick={() => removeImage(index)}
+                    className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 shadow-lg hover:bg-red-600 transition-colors"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+
           <div className="grid grid-cols-2 gap-4">
             <div className="col-span-2">
-              <Label htmlFor="name">Product Name *</Label>
+              <Label htmlFor="edit-name">اسم المنتج *</Label>
               <Input
-                id="name"
+                id="edit-name"
                 value={formData.name}
-                onChange={(e) =>
-                  setFormData({ ...formData, name: e.target.value })
-                }
+                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                 required
               />
             </div>
 
+            {/* تعديل الكمية لكل مقاس */}
+            <div className="col-span-2 p-4 border rounded-lg bg-slate-50">
+              <Label className="font-bold mb-3 block">المخزون المتوفر لكل مقاس:</Label>
+              <div className="grid grid-cols-4 gap-3">
+                {AVAILABLE_SIZES[formData.category].map((size) => (
+                  <div key={size} className="space-y-1">
+                    <Label className="text-[10px] uppercase text-gray-500">{size}</Label>
+                    <Input
+                      type="number"
+                      min="0"
+                      value={inventory[size] || ""}
+                      onChange={(e) => handleInventoryChange(size, e.target.value)}
+                      className="h-9 bg-white"
+                      placeholder="0"
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+
             <div>
-              <Label htmlFor="category">Category *</Label>
+              <Label htmlFor="edit-category">الفئة *</Label>
               <Select
                 value={formData.category}
-                onValueChange={(value) =>
-                  setFormData({
-                    ...formData,
-                    category: value as Product["category"],
-                  })
-                }
+                onValueChange={(v: any) => setFormData({ ...formData, category: v })}
               >
-                <SelectTrigger id="category">
-                  <SelectValue />
-                </SelectTrigger>
+                <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="men">Men</SelectItem>
                   <SelectItem value="women">Women</SelectItem>
@@ -129,83 +217,45 @@ export function EditProductDialog({
             </div>
 
             <div>
-              <Label htmlFor="price">Price (EGP) *</Label>
+              <Label htmlFor="edit-price">السعر (EGP) *</Label>
               <Input
-                id="price"
+                id="edit-price"
                 type="number"
-                min="0"
-                step="0.01"
                 value={formData.price}
-                onChange={(e) =>
-                  setFormData({ ...formData, price: e.target.value })
-                }
-                required
-              />
-            </div>
-
-            <div>
-              <Label htmlFor="quantity">Quantity *</Label>
-              <Input
-                id="quantity"
-                type="number"
-                min="0"
-                value={formData.quantity}
-                onChange={(e) =>
-                  setFormData({ ...formData, quantity: e.target.value })
-                }
-                required
-              />
-            </div>
-
-            <div>
-              <Label htmlFor="image">Image URL *</Label>
-              <Input
-                id="image"
-                type="url"
-                value={formData.image}
-                onChange={(e) =>
-                  setFormData({ ...formData, image: e.target.value })
-                }
+                onChange={(e) => setFormData({ ...formData, price: e.target.value })}
                 required
               />
             </div>
 
             <div className="col-span-2">
-              <Label>Available Sizes *</Label>
-              <div className="flex flex-wrap gap-3 mt-2">
-                {AVAILABLE_SIZES[formData.category].map((size) => (
-                  <label
-                    key={size}
-                    className="flex items-center gap-2 cursor-pointer"
-                  >
-                    <Checkbox
-                      checked={selectedSizes.includes(size)}
-                      onCheckedChange={() => toggleSize(size)}
-                    />
-                    <span className="text-sm">{size}</span>
-                  </label>
-                ))}
-              </div>
+              <Label htmlFor="edit-colors">الألوان (افصل بينها بفاصلة) *</Label>
+              <Input
+                id="edit-colors"
+                value={formData.colors}
+                onChange={(e) => setFormData({ ...formData, colors: e.target.value })}
+                placeholder="Black, White, Red"
+                required
+              />
             </div>
 
             <div className="col-span-2">
-              <Label htmlFor="description">Description</Label>
+              <Label htmlFor="edit-description">الوصف</Label>
               <Textarea
-                id="description"
+                id="edit-description"
                 value={formData.description}
-                onChange={(e) =>
-                  setFormData({ ...formData, description: e.target.value })
-                }
+                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                 rows={3}
               />
             </div>
           </div>
 
-          <div className="flex justify-end gap-2 pt-4">
+          <div className="flex justify-end gap-3 pt-4 border-t">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-              Cancel
+              إلغاء
             </Button>
-            <Button type="submit">Save Changes</Button>
+            <Button type="submit" disabled={isProcessing}>
+              {isProcessing ? "جاري المعالجة..." : "حفظ التغييرات"}
+            </Button>
           </div>
         </form>
       </DialogContent>

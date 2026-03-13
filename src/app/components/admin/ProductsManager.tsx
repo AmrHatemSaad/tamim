@@ -75,15 +75,16 @@ export function ProductsManager() {
               <TableHead>Name</TableHead>
               <TableHead>Category</TableHead>
               <TableHead>Price</TableHead>
-              <TableHead>Quantity</TableHead>
-              <TableHead>Sizes</TableHead>
+              <TableHead>Total Stock</TableHead>
+              <TableHead>Sizes (In Stock)</TableHead>
+              <TableHead>Colors</TableHead>
               <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {filteredProducts.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="text-center py-8 text-gray-500">
+                <TableCell colSpan={8} className="text-center py-8 text-gray-500">
                   No products found
                 </TableCell>
               </TableRow>
@@ -91,9 +92,10 @@ export function ProductsManager() {
               filteredProducts.map((product) => (
                 <TableRow key={product.id}>
                   <TableCell>
-                    <div className="w-12 h-12 rounded-md overflow-hidden bg-gray-100">
+                    <div className="w-12 h-12 rounded-md overflow-hidden bg-gray-100 border">
                       <ImageWithFallback
-                        src={product.image}
+                        // بنعرض أول صورة من المصفوفة الجديدة
+                        src={product.images && product.images.length > 0 ? product.images[0] : ""}
                         alt={product.name}
                         className="w-full h-full object-cover"
                       />
@@ -109,17 +111,40 @@ export function ProductsManager() {
                   <TableCell>
                     <span
                       className={
-                        product.quantity < 10
-                          ? "text-orange-600 font-semibold"
+                        product.totalQuantity < 10
+                          ? "text-orange-600 font-bold"
                           : ""
                       }
                     >
-                      {product.quantity}
+                      {product.totalQuantity}
                     </span>
                   </TableCell>
-                  <TableCell className="text-sm text-gray-600">
-                    {product.sizes.join(", ")}
+                  <TableCell>
+                    <div className="flex flex-wrap gap-1 max-w-[150px]">
+                      {/* عرض المقاسات اللي ليها كمية بس */}
+                      {Object.entries(product.inventory || {})
+                        .filter(([_, qty]) => qty > 0)
+                        .map(([size, qty]) => (
+                          <span key={size} className="text-[10px] bg-slate-100 px-1 rounded border">
+                            {size}({qty})
+                          </span>
+                        ))}
+                    </div>
                   </TableCell>
+                  
+                  <TableCell>
+                    <div className="flex flex-wrap gap-1">
+                      {product.colors && product.colors.map((color, idx) => (
+                        <span 
+                          key={idx} 
+                          className="inline-block px-2 py-0.5 bg-gray-50 border border-gray-200 text-[10px] rounded text-gray-700"
+                        >
+                          {color}
+                        </span>
+                      ))}
+                    </div>
+                  </TableCell>
+
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-2">
                       <Button

@@ -78,7 +78,7 @@ export function AdminLogin() {
             </Button>
 
             <p className="text-xs text-center text-gray-500 mt-4">
-              Demo password: admin123
+              Demo password: reem2010
             </p>
           </form>
         </CardContent>
