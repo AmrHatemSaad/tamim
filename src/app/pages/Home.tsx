@@ -13,17 +13,17 @@ export function Home() {
     {
       name: "Women",
       path: "/women",
-      image: "Women.png",
+      image: "public\Women.png",
     },
     {
       name: "Children",
       path: "/children",
-      image: "Children.png",
+      image: "public\Children.png",
     },
     {
       name: "طِراز",
       path: "/teraz",
-      image: "2 طِراز.png",
+      image: "public\Tiraz2.png",
     },
   ];
 
@@ -51,7 +51,7 @@ export function Home() {
       <section className="relative h-[600px] bg-gray-900 flex items-center justify-center overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-r from-gray-900/90 to-gray-900/50 z-10" />
         <ImageWithFallback
-          src="Background.png"
+          src="public\Background.png"
           alt="Hero"
           className="absolute inset-0 w-full h-full object-cover"
         />
