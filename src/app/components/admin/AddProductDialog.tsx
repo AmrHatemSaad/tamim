@@ -91,6 +91,18 @@ export function AddProductDialog({ open, onOpenChange }: AddProductDialogProps) 
     setSelectedSizes([]); // Reset sizes when category changes
   };
 
+  // الدالة الخاصة برفع الصورة تم فصلها هنا
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setFormData({ ...formData, image: reader.result as string });
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -165,18 +177,26 @@ export function AddProductDialog({ open, onOpenChange }: AddProductDialogProps) 
               />
             </div>
 
+            {/* الجزء الخاص برفع الصورة بعد تعديله */}
             <div>
-              <Label htmlFor="image">Image URL *</Label>
+              <Label htmlFor="image">Product Image *</Label>
               <Input
                 id="image"
-                type="url"
-                value={formData.image}
-                onChange={(e) =>
-                  setFormData({ ...formData, image: e.target.value })
-                }
-                placeholder="https://example.com/image.jpg"
-                required
+                type="file"
+                accept="image/*"
+                onChange={handleImageUpload}
+                required={!formData.image}
+                className="cursor-pointer mt-1"
               />
+              {formData.image && (
+                <div className="mt-2 flex justify-center border rounded-md p-2 bg-gray-50">
+                  <img
+                    src={formData.image}
+                    alt="Preview"
+                    className="h-24 w-auto object-contain rounded"
+                  />
+                </div>
+              )}
             </div>
 
             <div className="col-span-2">
