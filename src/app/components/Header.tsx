@@ -33,7 +33,11 @@ export function Header() {
         <div className="flex justify-between items-center h-16">
           {/* Logo */}
           <Link to="/" className="flex items-center">
-            <span className="text-2xl font-bold text-gray-900">TAMIM</span>
+            <img 
+              src="Tamim.png" 
+              alt="Tamim Logo" 
+              className="h-10 w-auto object-contain" 
+            />
           </Link>
 
           {/* Desktop Navigation */}
